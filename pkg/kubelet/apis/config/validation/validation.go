@@ -18,6 +18,7 @@ package validation
 
 import (
 	"fmt"
+	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"time"
 
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -113,6 +114,12 @@ func ValidateKubeletConfiguration(kc *kubeletconfig.KubeletConfiguration) error 
 	}
 	if kc.TopologyManagerPolicy != kubeletconfig.NoneTopologyManagerPolicy && !localFeatureGate.Enabled(features.TopologyManager) {
 		allErrors = append(allErrors, fmt.Errorf("invalid configuration: TopologyManager %v requires feature gate TopologyManager", kc.TopologyManagerPolicy))
+	}
+	if _, err := helper.ParseResourceList(kc.KubeReserved); err != nil {
+		allErrors = append(allErrors, err)
+	}
+	if _, err := helper.ParseResourceList(kc.SystemReserved); err != nil {
+		allErrors = append(allErrors, err)
 	}
 	for _, val := range kc.EnforceNodeAllocatable {
 		switch val {

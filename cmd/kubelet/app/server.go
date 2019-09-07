@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"net"
 	"net/http"
 	"net/url"
@@ -38,7 +39,6 @@ import (
 	"k8s.io/klog"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -85,7 +85,6 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/kubeletconfig/configfiles"
 	"k8s.io/kubernetes/pkg/kubelet/server"
 	"k8s.io/kubernetes/pkg/kubelet/server/streaming"
-	"k8s.io/kubernetes/pkg/kubelet/stats/pidlimit"
 	kubetypes "k8s.io/kubernetes/pkg/kubelet/types"
 	"k8s.io/kubernetes/pkg/util/configz"
 	utilfs "k8s.io/kubernetes/pkg/util/filesystem"
@@ -644,11 +643,11 @@ func run(s *options.KubeletServer, kubeDeps *kubelet.Dependencies, stopCh <-chan
 			klog.Info("--cgroups-per-qos enabled, but --cgroup-root was not specified.  defaulting to /")
 			s.CgroupRoot = "/"
 		}
-		kubeReserved, err := parseResourceList(s.KubeReserved)
+		kubeReserved, err := helper.ParseResourceList(s.KubeReserved)
 		if err != nil {
 			return err
 		}
-		systemReserved, err := parseResourceList(s.SystemReserved)
+		systemReserved, err := helper.ParseResourceList(s.SystemReserved)
 		if err != nil {
 			return err
 		}
@@ -1160,34 +1159,6 @@ func createAndInitKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	k.StartGarbageCollection()
 
 	return k, nil
-}
-
-// parseResourceList parses the given configuration map into an API
-// ResourceList or returns an error.
-func parseResourceList(m map[string]string) (v1.ResourceList, error) {
-	if len(m) == 0 {
-		return nil, nil
-	}
-	rl := make(v1.ResourceList)
-	for k, v := range m {
-		switch v1.ResourceName(k) {
-		// CPU, memory, local storage, and PID resources are supported.
-		case v1.ResourceCPU, v1.ResourceMemory, v1.ResourceEphemeralStorage, pidlimit.PIDs:
-			if v1.ResourceName(k) != pidlimit.PIDs || utilfeature.DefaultFeatureGate.Enabled(features.SupportNodePidsLimit) {
-				q, err := resource.ParseQuantity(v)
-				if err != nil {
-					return nil, err
-				}
-				if q.Sign() == -1 {
-					return nil, fmt.Errorf("resource quantity for %q cannot be negative: %v", k, v)
-				}
-				rl[v1.ResourceName(k)] = q
-			}
-		default:
-			return nil, fmt.Errorf("cannot reserve %q resource", k)
-		}
-	}
-	return rl, nil
 }
 
 // BootstrapKubeletConfigController constructs and bootstrap a configuration controller

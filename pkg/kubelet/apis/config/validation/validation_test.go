@@ -85,8 +85,10 @@ func TestValidateKubeletConfiguration(t *testing.T) {
 		NodeLeaseDurationSeconds:    -1,
 		CPUCFSQuotaPeriod:           metav1.Duration{Duration: 0},
 		TopologyManagerPolicy:       "",
+		KubeReserved:                map[string]string{"cpu2": "200m"},
+		SystemReserved:              map[string]string{"cpu": "-200m"},
 	}
-	const numErrs = 26
+	const numErrs = 28
 	if allErrors := ValidateKubeletConfiguration(errorCase); len(allErrors.(utilerrors.Aggregate).Errors()) != numErrs {
 		t.Errorf("expect %d errors, got %v", numErrs, len(allErrors.(utilerrors.Aggregate).Errors()))
 	}
