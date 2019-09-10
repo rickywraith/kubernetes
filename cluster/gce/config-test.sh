@@ -534,3 +534,6 @@ GCE_PRIVATE_CLUSTER="${KUBE_GCE_PRIVATE_CLUSTER:-false}"
 ETCD_LISTEN_CLIENT_IP=0.0.0.0
 
 GCE_UPLOAD_KUBCONFIG_TO_MASTER_METADATA=true
+
+# Enable token webhook authentication in the Kubelet
+KUBELET_TEST_ARGS="${KUBELET_TEST_ARGS:-} --authentication-token-webhook=true"
