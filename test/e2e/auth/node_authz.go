@@ -38,7 +38,7 @@ const (
 	nodeNamePrefix = "system:node:"
 )
 
-var _ = SIGDescribe("[Feature:NodeAuthorizer]", func() {
+var _ = SIGDescribe("Node Restriction [Config:NodeAuthorizer][Config:NodeRestriction]", func() {
 
 	f := framework.NewDefaultFramework("node-authz")
 	// client that will impersonate a node

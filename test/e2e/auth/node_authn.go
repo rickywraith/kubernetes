@@ -19,7 +19,7 @@ package auth
 import (
 	"fmt"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/master/ports"
 	"k8s.io/kubernetes/test/e2e/framework"
@@ -30,7 +30,7 @@ import (
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
-var _ = SIGDescribe("[Feature:NodeAuthenticator]", func() {
+var _ = SIGDescribe("Node Authentication", func() {
 
 	f := framework.NewDefaultFramework("node-authn")
 	var ns string
@@ -54,7 +54,7 @@ var _ = SIGDescribe("[Feature:NodeAuthenticator]", func() {
 		gomega.Expect(len(sa.Secrets)).NotTo(gomega.BeZero())
 	})
 
-	ginkgo.It("The kubelet's main port 10250 should reject requests with no credentials", func() {
+	ginkgo.It("The kubelet's main port 10250 should reject requests with no credentials [Config:Kubelet:NoAnonymousAuth]", func() {
 		pod := createNodeAuthTestPod(f)
 		for _, nodeIP := range nodeIPs {
 			// Anonymous authentication is disabled by default
@@ -63,7 +63,7 @@ var _ = SIGDescribe("[Feature:NodeAuthenticator]", func() {
 		}
 	})
 
-	ginkgo.It("The kubelet can delegate ServiceAccount tokens to the API server", func() {
+	ginkgo.It("The kubelet can delegate ServiceAccount tokens to the API server [Config:Kubelet:WebhookAuthn]", func() {
 		ginkgo.By("create a new ServiceAccount for authentication")
 		trueValue := true
 		newSA := &v1.ServiceAccount{
