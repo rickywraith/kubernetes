@@ -121,7 +121,7 @@ func expectUnauthorizedOrFailToConnect(f *framework.Framework, pod *v1.Pod, url 
 		// protected by other means (e.g. not exposed on the external interface).
 		if err, ok := err.(executils.CodeExitError); ok {
 			const statusFailedToConnect = 7 // curl exit code for failed to connect
-			gomega.Expect(err.ExitStatus()).To(gomega.Equal(statusFailedToConnect),
+			framework.ExpectEqual(err.ExitStatus(), statusFailedToConnect,
 				"if curl fails, it should be a 'failed to conenct' error, but got: %s", err.Error())
 		} else {
 			framework.Failf("Unexpected `curl` error: %v", err)
