@@ -244,10 +244,14 @@ func parseSchedule(schedule string) error {
 		return fmt.Errorf("schedule timezone is required")
 	}
 	if pos := strings.Index(schedule,"CRON_TZ="); pos != -1 {
-		schedule = schedule[:pos-1]
+		if err := cron.New().AddFunc(schedule[pos:] + " " + schedule[:pos-1], nil); err != nil {
+			return fmt.Errorf("invalid timezone")
+		}
 	}
 	pos := strings.Index(schedule, "TZ=")
-	schedule = schedule[:pos-1]
+	if err := cron.New().AddFunc(schedule[pos:] + " " + schedule[:pos-1], nil); err != nil {
+		return fmt.Errorf("invalid timezone")
+	}
 	if _, err := cron.ParseStandard(schedule); err != nil {
 		return err
 	}

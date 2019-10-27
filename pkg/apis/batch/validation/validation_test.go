@@ -357,7 +357,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "@hourly",
+				Schedule:          "@hourly CRON_TZ=",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
