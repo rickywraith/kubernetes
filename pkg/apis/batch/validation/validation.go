@@ -17,7 +17,9 @@ limitations under the License.
 package validation
 
 import (
+	"fmt"
 	"github.com/robfig/cron"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	unversionedvalidation "k8s.io/apimachinery/pkg/apis/meta/v1/validation"
@@ -230,11 +232,26 @@ func validateConcurrencyPolicy(concurrencyPolicy *batch.ConcurrencyPolicy, fldPa
 
 func validateScheduleFormat(schedule string, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
-	if _, err := cron.ParseStandard(schedule); err != nil {
+	if err := parseSchedule(schedule); err != nil {
 		allErrs = append(allErrs, field.Invalid(fldPath, schedule, err.Error()))
 	}
 
 	return allErrs
+}
+
+func parseSchedule(schedule string) error {
+	if !strings.Contains(schedule, "TZ=") && !strings.Contains(schedule, "CRON_TZ=") {
+		return fmt.Errorf("schedule timezone is required")
+	}
+	if pos := strings.Index(schedule,"CRON_TZ="); pos != -1 {
+		schedule = schedule[:pos-1]
+	}
+	pos := strings.Index(schedule, "TZ=")
+	schedule = schedule[:pos-1]
+	if _, err := cron.ParseStandard(schedule); err != nil {
+		return err
+	}
+	return nil
 }
 
 func ValidateJobTemplate(job *batch.JobTemplate) field.ErrorList {

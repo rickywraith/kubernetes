@@ -91,7 +91,7 @@ type CronJobList struct {
 // CronJobSpec describes how the job execution will look like and when it will actually run.
 type CronJobSpec struct {
 
-	// The schedule in Cron format, see https://en.wikipedia.org/wiki/Cron.
+	// The schedule in Cron format, followed by a timezone suffix. See https://en.wikipedia.org/wiki/Cron.
 	Schedule string `json:"schedule" protobuf:"bytes,1,opt,name=schedule"`
 
 	// Optional deadline in seconds for starting the job if it misses scheduled
