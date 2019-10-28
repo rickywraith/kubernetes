@@ -18,7 +18,7 @@ package validation
 
 import (
 	"fmt"
-	"github.com/robfig/cron"
+	"github.com/robfig/cron/v3"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -244,13 +244,16 @@ func parseSchedule(schedule string) error {
 		return fmt.Errorf("schedule timezone is required")
 	}
 	if pos := strings.Index(schedule,"CRON_TZ="); pos != -1 {
-		if err := cron.New().AddFunc(schedule[pos:] + " " + schedule[:pos-1], nil); err != nil {
+		if _, err := cron.New().AddFunc(schedule[pos:] + " " + schedule[:pos-1], nil); err != nil {
 			return fmt.Errorf("invalid timezone")
 		}
+		return nil
 	}
-	pos := strings.Index(schedule, "TZ=")
-	if err := cron.New().AddFunc(schedule[pos:] + " " + schedule[:pos-1], nil); err != nil {
-		return fmt.Errorf("invalid timezone")
+	if pos := strings.Index(schedule, "TZ="); pos != -1 {
+		if _, err := cron.New().AddFunc(schedule[pos:] + " " + schedule[:pos-1], nil); err != nil {
+			return fmt.Errorf("invalid timezone")
+		}
+		return nil
 	}
 	if _, err := cron.ParseStandard(schedule); err != nil {
 		return err

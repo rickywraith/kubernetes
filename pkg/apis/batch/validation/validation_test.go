@@ -341,7 +341,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
@@ -357,7 +357,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "@hourly CRON_TZ=",
+				Schedule:          "@hourly CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
@@ -424,7 +424,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:                "* * * * ?",
+				Schedule:                "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy:       batch.AllowConcurrent,
 				StartingDeadlineSeconds: &negative64,
 				JobTemplate: batch.JobTemplateSpec{
@@ -441,7 +441,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:                   "* * * * ?",
+				Schedule:                   "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy:          batch.AllowConcurrent,
 				SuccessfulJobsHistoryLimit: &negative,
 				JobTemplate: batch.JobTemplateSpec{
@@ -458,7 +458,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:               "* * * * ?",
+				Schedule:               "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy:      batch.AllowConcurrent,
 				FailedJobsHistoryLimit: &negative,
 				JobTemplate: batch.JobTemplateSpec{
@@ -475,7 +475,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule: "* * * * ?",
+				Schedule: "* * * * ? CRON_TZ=America/Los_Angeles",
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
 						Template: validPodTemplateSpec,
@@ -490,7 +490,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
@@ -507,7 +507,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 
@@ -525,7 +525,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
@@ -542,7 +542,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
@@ -559,7 +559,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
@@ -575,7 +575,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
@@ -592,7 +592,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
@@ -616,7 +616,7 @@ func TestValidateCronJob(t *testing.T) {
 				UID:       types.UID("1a2b3c"),
 			},
 			Spec: batch.CronJobSpec{
-				Schedule:          "* * * * ?",
+				Schedule:          "* * * * ? CRON_TZ=America/Los_Angeles",
 				ConcurrencyPolicy: batch.AllowConcurrent,
 				JobTemplate: batch.JobTemplateSpec{
 					Spec: batch.JobSpec{
