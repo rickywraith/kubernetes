@@ -780,7 +780,7 @@ func TestValidateCustomResourceDefinition(t *testing.T) {
 			},
 		},
 		{
-			name: "webhook conversion with preserveUnknownFields=false",
+			name: "webhook conversion with preserveUnknownFields=false, conversionReviewVersions=[v1beta1]",
 			resource: &apiextensions.CustomResourceDefinition{
 				ObjectMeta: metav1.ObjectMeta{Name: "plural.group.com"},
 				Spec: apiextensions.CustomResourceDefinitionSpec{
@@ -810,6 +810,51 @@ func TestValidateCustomResourceDefinition(t *testing.T) {
 							URL: strPtr("https://example.com/webhook"),
 						},
 						ConversionReviewVersions: []string{"v1beta1"},
+					},
+					Validation: &apiextensions.CustomResourceValidation{
+						OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+							Type: "object",
+						},
+					},
+					PreserveUnknownFields: pointer.BoolPtr(false),
+				},
+				Status: apiextensions.CustomResourceDefinitionStatus{
+					StoredVersions: []string{"version1"},
+				},
+			},
+			errors: []validationMatch{},
+		},
+		{
+			name: "webhook conversion with preserveUnknownFields=false, conversionReviewVersions=[v1]",
+			resource: &apiextensions.CustomResourceDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: "plural.group.com"},
+				Spec: apiextensions.CustomResourceDefinitionSpec{
+					Group: "group.com",
+					Scope: apiextensions.ResourceScope("Cluster"),
+					Names: apiextensions.CustomResourceDefinitionNames{
+						Plural:   "plural",
+						Singular: "singular",
+						Kind:     "Plural",
+						ListKind: "PluralList",
+					},
+					Versions: []apiextensions.CustomResourceDefinitionVersion{
+						{
+							Name:    "version1",
+							Served:  true,
+							Storage: true,
+						},
+						{
+							Name:    "version2",
+							Served:  true,
+							Storage: false,
+						},
+					},
+					Conversion: &apiextensions.CustomResourceConversion{
+						Strategy: apiextensions.ConversionStrategyType("Webhook"),
+						WebhookClientConfig: &apiextensions.WebhookClientConfig{
+							URL: strPtr("https://example.com/webhook"),
+						},
+						ConversionReviewVersions: []string{"v1"},
 					},
 					Validation: &apiextensions.CustomResourceValidation{
 						OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
@@ -6756,6 +6801,74 @@ func TestValidateCustomResourceDefinitionValidation(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "invalid type with map type extension (granular)",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type:     "array",
+					XMapType: strPtr("granular"),
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "unset type with map type extension (granular)",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					XMapType: strPtr("granular"),
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid type with map type extension (atomic)",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type:     "array",
+					XMapType: strPtr("atomic"),
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "unset type with map type extension (atomic)",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					XMapType: strPtr("atomic"),
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "invalid map type",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type:     "object",
+					XMapType: strPtr("badMapType"),
+				},
+			},
+			wantError: true,
+		},
+		{
+			name: "allowed type with map type extension (granular)",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type:     "object",
+					XMapType: strPtr("granular"),
+				},
+			},
+			wantError: false,
+		},
+		{
+			name: "allowed type with map type extension (atomic)",
+			input: apiextensions.CustomResourceValidation{
+				OpenAPIV3Schema: &apiextensions.JSONSchemaProps{
+					Type:     "object",
+					XMapType: strPtr("atomic"),
 				},
 			},
 			wantError: false,

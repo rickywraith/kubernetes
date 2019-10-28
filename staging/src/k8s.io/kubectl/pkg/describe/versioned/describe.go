@@ -39,6 +39,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	certificatesv1beta1 "k8s.io/api/certificates/v1beta1"
+	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1alpha1 "k8s.io/api/discovery/v1alpha1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
@@ -474,7 +475,7 @@ func describeLimitRangeSpec(spec corev1.LimitRangeSpec, prefix string, w PrefixW
 // DescribeLimitRanges merges a set of limit range items into a single tabular description
 func DescribeLimitRanges(limitRanges *corev1.LimitRangeList, w PrefixWriter) {
 	if len(limitRanges.Items) == 0 {
-		w.Write(LEVEL_0, "No resource limits.\n")
+		w.Write(LEVEL_0, "No LimitRange resource.\n")
 		return
 	}
 	w.Write(LEVEL_0, "Resource Limits\n Type\tResource\tMin\tMax\tDefault Request\tDefault Limit\tMax Limit/Request Ratio\n")
@@ -1549,8 +1550,11 @@ func describePersistentVolumeClaim(pvc *corev1.PersistentVolumeClaim, events *co
 		}
 		if pvc.Spec.DataSource != nil {
 			w.Write(LEVEL_0, "DataSource:\n")
-			w.Write(LEVEL_1, "Name:\t%v\n", pvc.Spec.DataSource.Name)
+			if pvc.Spec.DataSource.APIGroup != nil {
+				w.Write(LEVEL_1, "APIGroup:\t%v\n", *pvc.Spec.DataSource.APIGroup)
+			}
 			w.Write(LEVEL_1, "Kind:\t%v\n", pvc.Spec.DataSource.Kind)
+			w.Write(LEVEL_1, "Name:\t%v\n", pvc.Spec.DataSource.Name)
 		}
 		printPodsMultiline(w, "Mounted By", mountPods)
 
@@ -2997,6 +3001,15 @@ func (d *NodeDescriber) Describe(namespace, name string, describerSettings descr
 		return "", err
 	}
 
+	lease, err := d.CoordinationV1().Leases(corev1.NamespaceNodeLease).Get(name, metav1.GetOptions{})
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return "", err
+		}
+		// Corresponding Lease object doesn't exist - print it accordingly.
+		lease = nil
+	}
+
 	fieldSelector, err := fields.ParseSelector("spec.nodeName=" + name + ",status.phase!=" + string(corev1.PodSucceeded) + ",status.phase!=" + string(corev1.PodFailed))
 	if err != nil {
 		return "", err
@@ -3023,10 +3036,10 @@ func (d *NodeDescriber) Describe(namespace, name string, describerSettings descr
 		}
 	}
 
-	return describeNode(node, nodeNonTerminatedPodsList, events, canViewPods)
+	return describeNode(node, lease, nodeNonTerminatedPodsList, events, canViewPods)
 }
 
-func describeNode(node *corev1.Node, nodeNonTerminatedPodsList *corev1.PodList, events *corev1.EventList, canViewPods bool) (string, error) {
+func describeNode(node *corev1.Node, lease *coordinationv1.Lease, nodeNonTerminatedPodsList *corev1.PodList, events *corev1.EventList, canViewPods bool) (string, error) {
 	return tabbedString(func(out io.Writer) error {
 		w := NewPrefixWriter(out)
 		w.Write(LEVEL_0, "Name:\t%s\n", node.Name)
@@ -3040,6 +3053,24 @@ func describeNode(node *corev1.Node, nodeNonTerminatedPodsList *corev1.PodList, 
 		w.Write(LEVEL_0, "CreationTimestamp:\t%s\n", node.CreationTimestamp.Time.Format(time.RFC1123Z))
 		printNodeTaintsMultiline(w, "Taints", node.Spec.Taints)
 		w.Write(LEVEL_0, "Unschedulable:\t%v\n", node.Spec.Unschedulable)
+
+		w.Write(LEVEL_0, "Lease:\n")
+		holderIdentity := "<unset>"
+		if lease != nil && lease.Spec.HolderIdentity != nil {
+			holderIdentity = *lease.Spec.HolderIdentity
+		}
+		w.Write(LEVEL_1, "HolderIdentity:\t%s\n", holderIdentity)
+		acquireTime := "<unset>"
+		if lease != nil && lease.Spec.AcquireTime != nil {
+			acquireTime = lease.Spec.AcquireTime.Time.Format(time.RFC1123Z)
+		}
+		w.Write(LEVEL_1, "AcquireTime:\t%s\n", acquireTime)
+		renewTime := "<unset>"
+		if lease != nil && lease.Spec.RenewTime != nil {
+			renewTime = lease.Spec.RenewTime.Time.Format(time.RFC1123Z)
+		}
+		w.Write(LEVEL_1, "RenewTime:\t%s\n", renewTime)
+
 		if len(node.Status.Conditions) > 0 {
 			w.Write(LEVEL_0, "Conditions:\n  Type\tStatus\tLastHeartbeatTime\tLastTransitionTime\tReason\tMessage\n")
 			w.Write(LEVEL_1, "----\t------\t-----------------\t------------------\t------\t-------\n")
@@ -3067,7 +3098,7 @@ func describeNode(node *corev1.Node, nodeNonTerminatedPodsList *corev1.PodList, 
 			sort.Sort(SortableResourceNames(resources))
 			for _, resource := range resources {
 				value := resourceList[resource]
-				w.Write(LEVEL_0, " %s:\t%s\n", resource, value.String())
+				w.Write(LEVEL_0, "  %s:\t%s\n", resource, value.String())
 			}
 		}
 
@@ -3081,16 +3112,16 @@ func describeNode(node *corev1.Node, nodeNonTerminatedPodsList *corev1.PodList, 
 		}
 
 		w.Write(LEVEL_0, "System Info:\n")
-		w.Write(LEVEL_0, " Machine ID:\t%s\n", node.Status.NodeInfo.MachineID)
-		w.Write(LEVEL_0, " System UUID:\t%s\n", node.Status.NodeInfo.SystemUUID)
-		w.Write(LEVEL_0, " Boot ID:\t%s\n", node.Status.NodeInfo.BootID)
-		w.Write(LEVEL_0, " Kernel Version:\t%s\n", node.Status.NodeInfo.KernelVersion)
-		w.Write(LEVEL_0, " OS Image:\t%s\n", node.Status.NodeInfo.OSImage)
-		w.Write(LEVEL_0, " Operating System:\t%s\n", node.Status.NodeInfo.OperatingSystem)
-		w.Write(LEVEL_0, " Architecture:\t%s\n", node.Status.NodeInfo.Architecture)
-		w.Write(LEVEL_0, " Container Runtime Version:\t%s\n", node.Status.NodeInfo.ContainerRuntimeVersion)
-		w.Write(LEVEL_0, " Kubelet Version:\t%s\n", node.Status.NodeInfo.KubeletVersion)
-		w.Write(LEVEL_0, " Kube-Proxy Version:\t%s\n", node.Status.NodeInfo.KubeProxyVersion)
+		w.Write(LEVEL_0, "  Machine ID:\t%s\n", node.Status.NodeInfo.MachineID)
+		w.Write(LEVEL_0, "  System UUID:\t%s\n", node.Status.NodeInfo.SystemUUID)
+		w.Write(LEVEL_0, "  Boot ID:\t%s\n", node.Status.NodeInfo.BootID)
+		w.Write(LEVEL_0, "  Kernel Version:\t%s\n", node.Status.NodeInfo.KernelVersion)
+		w.Write(LEVEL_0, "  OS Image:\t%s\n", node.Status.NodeInfo.OSImage)
+		w.Write(LEVEL_0, "  Operating System:\t%s\n", node.Status.NodeInfo.OperatingSystem)
+		w.Write(LEVEL_0, "  Architecture:\t%s\n", node.Status.NodeInfo.Architecture)
+		w.Write(LEVEL_0, "  Container Runtime Version:\t%s\n", node.Status.NodeInfo.ContainerRuntimeVersion)
+		w.Write(LEVEL_0, "  Kubelet Version:\t%s\n", node.Status.NodeInfo.KubeletVersion)
+		w.Write(LEVEL_0, "  Kube-Proxy Version:\t%s\n", node.Status.NodeInfo.KubeProxyVersion)
 
 		// remove when .PodCIDR is depreciated
 		if len(node.Spec.PodCIDR) > 0 {

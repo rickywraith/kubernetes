@@ -47,16 +47,6 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
-	if err := s.AddGeneratedConversionFunc((*v1alpha1.KubeSchedulerLeaderElectionConfiguration)(nil), (*config.KubeSchedulerLeaderElectionConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_v1alpha1_KubeSchedulerLeaderElectionConfiguration_To_config_KubeSchedulerLeaderElectionConfiguration(a.(*v1alpha1.KubeSchedulerLeaderElectionConfiguration), b.(*config.KubeSchedulerLeaderElectionConfiguration), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddGeneratedConversionFunc((*config.KubeSchedulerLeaderElectionConfiguration)(nil), (*v1alpha1.KubeSchedulerLeaderElectionConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
-		return Convert_config_KubeSchedulerLeaderElectionConfiguration_To_v1alpha1_KubeSchedulerLeaderElectionConfiguration(a.(*config.KubeSchedulerLeaderElectionConfiguration), b.(*v1alpha1.KubeSchedulerLeaderElectionConfiguration), scope)
-	}); err != nil {
-		return err
-	}
 	if err := s.AddGeneratedConversionFunc((*v1alpha1.Plugin)(nil), (*config.Plugin)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1alpha1_Plugin_To_config_Plugin(a.(*v1alpha1.Plugin), b.(*config.Plugin), scope)
 	}); err != nil {
@@ -170,6 +160,8 @@ func autoConvert_v1alpha1_KubeSchedulerConfiguration_To_config_KubeSchedulerConf
 	out.DisablePreemption = in.DisablePreemption
 	out.PercentageOfNodesToScore = in.PercentageOfNodesToScore
 	out.BindTimeoutSeconds = (*int64)(unsafe.Pointer(in.BindTimeoutSeconds))
+	out.PodInitialBackoffSeconds = (*int64)(unsafe.Pointer(in.PodInitialBackoffSeconds))
+	out.PodMaxBackoffSeconds = (*int64)(unsafe.Pointer(in.PodMaxBackoffSeconds))
 	out.Plugins = (*config.Plugins)(unsafe.Pointer(in.Plugins))
 	out.PluginConfig = *(*[]config.PluginConfig)(unsafe.Pointer(&in.PluginConfig))
 	return nil
@@ -200,6 +192,8 @@ func autoConvert_config_KubeSchedulerConfiguration_To_v1alpha1_KubeSchedulerConf
 	out.DisablePreemption = in.DisablePreemption
 	out.PercentageOfNodesToScore = in.PercentageOfNodesToScore
 	out.BindTimeoutSeconds = (*int64)(unsafe.Pointer(in.BindTimeoutSeconds))
+	out.PodInitialBackoffSeconds = (*int64)(unsafe.Pointer(in.PodInitialBackoffSeconds))
+	out.PodMaxBackoffSeconds = (*int64)(unsafe.Pointer(in.PodMaxBackoffSeconds))
 	out.Plugins = (*v1alpha1.Plugins)(unsafe.Pointer(in.Plugins))
 	out.PluginConfig = *(*[]v1alpha1.PluginConfig)(unsafe.Pointer(&in.PluginConfig))
 	return nil

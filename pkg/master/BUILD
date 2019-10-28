@@ -53,7 +53,6 @@ go_library(
         "//pkg/registry/coordination/rest:go_default_library",
         "//pkg/registry/core/rangeallocation:go_default_library",
         "//pkg/registry/core/rest:go_default_library",
-        "//pkg/registry/core/service/ipallocator:go_default_library",
         "//pkg/registry/core/service/ipallocator/controller:go_default_library",
         "//pkg/registry/core/service/portallocator/controller:go_default_library",
         "//pkg/registry/discovery/rest:go_default_library",
@@ -128,6 +127,8 @@ go_library(
         "//staging/src/k8s.io/client-go/rest:go_default_library",
         "//vendor/github.com/prometheus/client_golang/prometheus:go_default_library",
         "//vendor/k8s.io/klog:go_default_library",
+        "//vendor/k8s.io/utils/integer:go_default_library",
+        "//vendor/k8s.io/utils/net:go_default_library",
     ],
 )
 
@@ -157,7 +158,6 @@ go_test(
         "//pkg/registry/certificates/rest:go_default_library",
         "//pkg/registry/core/rest:go_default_library",
         "//pkg/registry/registrytest:go_default_library",
-        "//pkg/version:go_default_library",
         "//staging/src/k8s.io/api/certificates/v1beta1:go_default_library",
         "//staging/src/k8s.io/api/core/v1:go_default_library",
         "//staging/src/k8s.io/apimachinery/pkg/api/apitesting/naming:go_default_library",
@@ -182,6 +182,7 @@ go_test(
         "//staging/src/k8s.io/client-go/kubernetes/fake:go_default_library",
         "//staging/src/k8s.io/client-go/rest:go_default_library",
         "//staging/src/k8s.io/client-go/testing:go_default_library",
+        "//staging/src/k8s.io/component-base/version:go_default_library",
         "//vendor/github.com/go-openapi/loads:go_default_library",
         "//vendor/github.com/go-openapi/spec:go_default_library",
         "//vendor/github.com/go-openapi/strfmt:go_default_library",

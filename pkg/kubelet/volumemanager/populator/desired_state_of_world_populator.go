@@ -298,6 +298,7 @@ func (dswp *desiredStateOfWorldPopulator) processPodVolumes(
 	allVolumesAdded := true
 	mounts, devices := util.GetPodVolumeNames(pod)
 
+	expandInUsePV := utilfeature.DefaultFeatureGate.Enabled(features.ExpandInUsePersistentVolumes)
 	// Process volume spec for each volume defined in pod
 	for _, podVolume := range pod.Spec.Volumes {
 		if !mounts.Has(podVolume.Name) && !devices.Has(podVolume.Name) {
@@ -331,15 +332,15 @@ func (dswp *desiredStateOfWorldPopulator) processPodVolumes(
 				err)
 			dswp.desiredStateOfWorld.AddErrorToPod(uniquePodName, err.Error())
 			allVolumesAdded = false
+		} else {
+			klog.V(4).Infof(
+				"Added volume %q (volSpec=%q) for pod %q to desired state.",
+				podVolume.Name,
+				volumeSpec.Name(),
+				uniquePodName)
 		}
 
-		klog.V(4).Infof(
-			"Added volume %q (volSpec=%q) for pod %q to desired state.",
-			podVolume.Name,
-			volumeSpec.Name(),
-			uniquePodName)
-
-		if utilfeature.DefaultFeatureGate.Enabled(features.ExpandInUsePersistentVolumes) {
+		if expandInUsePV {
 			dswp.checkVolumeFSResize(pod, podVolume, pvc, volumeSpec,
 				uniquePodName, mountedVolumesForPod, processedVolumesForFSResize)
 		}
@@ -504,19 +505,24 @@ func (dswp *desiredStateOfWorldPopulator) createVolumeSpec(
 			pvcSource.ClaimName,
 			pvcUID)
 
-		// TODO: remove feature gate check after no longer needed
+		// TODO: replace this with util.GetVolumeMode() when features.BlockVolume is removed.
+		// The function will return the right value then.
+		volumeMode := v1.PersistentVolumeFilesystem
+		if volumeSpec.PersistentVolume != nil && volumeSpec.PersistentVolume.Spec.VolumeMode != nil {
+			volumeMode = *volumeSpec.PersistentVolume.Spec.VolumeMode
+		}
+
+		// TODO: remove features.BlockVolume checks / comments after no longer needed
+		// Error if a container has volumeMounts but the volumeMode of PVC isn't Filesystem.
+		// Do not check feature gate here to make sure even when the feature is disabled in kubelet,
+		// because controller-manager / API server can already contain block PVs / PVCs.
+		if mounts.Has(podVolume.Name) && volumeMode != v1.PersistentVolumeFilesystem {
+			return nil, nil, "", fmt.Errorf(
+				"volume %s has volumeMode %s, but is specified in volumeMounts",
+				podVolume.Name,
+				volumeMode)
+		}
 		if utilfeature.DefaultFeatureGate.Enabled(features.BlockVolume) {
-			volumeMode, err := util.GetVolumeMode(volumeSpec)
-			if err != nil {
-				return nil, nil, "", err
-			}
-			// Error if a container has volumeMounts but the volumeMode of PVC isn't Filesystem
-			if mounts.Has(podVolume.Name) && volumeMode != v1.PersistentVolumeFilesystem {
-				return nil, nil, "", fmt.Errorf(
-					"volume %s has volumeMode %s, but is specified in volumeMounts",
-					podVolume.Name,
-					volumeMode)
-			}
 			// Error if a container has volumeDevices but the volumeMode of PVC isn't Block
 			if devices.Has(podVolume.Name) && volumeMode != v1.PersistentVolumeBlock {
 				return nil, nil, "", fmt.Errorf(

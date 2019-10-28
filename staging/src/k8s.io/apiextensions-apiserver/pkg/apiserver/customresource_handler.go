@@ -125,6 +125,10 @@ type crdHandler struct {
 	// purpose of managing fields, it is how CR handlers get the structure
 	// of TypeMeta and ObjectMeta
 	staticOpenAPISpec *spec.Swagger
+
+	// The limit on the request size that would be accepted and decoded in a write request
+	// 0 means no limit.
+	maxRequestBodyBytes int64
 }
 
 // crdInfo stores enough information to serve the storage for the custom resource
@@ -169,7 +173,8 @@ func NewCustomResourceDefinitionHandler(
 	authorizer authorizer.Authorizer,
 	requestTimeout time.Duration,
 	minRequestTimeout time.Duration,
-	staticOpenAPISpec *spec.Swagger) (*crdHandler, error) {
+	staticOpenAPISpec *spec.Swagger,
+	maxRequestBodyBytes int64) (*crdHandler, error) {
 	ret := &crdHandler{
 		versionDiscoveryHandler: versionDiscoveryHandler,
 		groupDiscoveryHandler:   groupDiscoveryHandler,
@@ -185,6 +190,7 @@ func NewCustomResourceDefinitionHandler(
 		requestTimeout:          requestTimeout,
 		minRequestTimeout:       minRequestTimeout,
 		staticOpenAPISpec:       staticOpenAPISpec,
+		maxRequestBodyBytes:     maxRequestBodyBytes,
 	}
 	crdInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    ret.createCustomResourceDefinition,
@@ -644,27 +650,10 @@ func (r *crdHandler) getOrCreateServingInfoFor(uid types.UID, name string) (*crd
 		structuralSchemas[v.Name] = s
 	}
 
-	var openAPIModels proto.Models
-	if utilfeature.DefaultFeatureGate.Enabled(features.ServerSideApply) && r.staticOpenAPISpec != nil {
-		specs := []*spec.Swagger{}
-		for _, v := range crd.Spec.Versions {
-			s, err := builder.BuildSwagger(crd, v.Name, builder.Options{V2: false, StripDefaults: true, StripValueValidation: true})
-			if err != nil {
-				utilruntime.HandleError(err)
-				return nil, fmt.Errorf("the server could not properly serve the CR schema")
-			}
-			specs = append(specs, s)
-		}
-		mergedOpenAPI, err := builder.MergeSpecs(r.staticOpenAPISpec, specs...)
-		if err != nil {
-			utilruntime.HandleError(err)
-			return nil, fmt.Errorf("the server could not properly merge the CR schema")
-		}
-		openAPIModels, err = utilopenapi.ToProtoModels(mergedOpenAPI)
-		if err != nil {
-			utilruntime.HandleError(err)
-			return nil, fmt.Errorf("the server could not properly serve the CR schema")
-		}
+	openAPIModels, err := buildOpenAPIModelsForApply(r.staticOpenAPISpec, crd)
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("error building openapi models for %s: %v", crd.Name, err))
+		openAPIModels = nil
 	}
 
 	for _, v := range crd.Spec.Versions {
@@ -829,14 +818,17 @@ func (r *crdHandler) getOrCreateServingInfoFor(uid types.UID, name string) (*crd
 			TableConvertor: storages[v.Name].CustomResource,
 
 			Authorizer: r.authorizer,
+
+			MaxRequestBodyBytes: r.maxRequestBodyBytes,
 		}
 		if utilfeature.DefaultFeatureGate.Enabled(features.ServerSideApply) {
 			reqScope := *requestScopes[v.Name]
-			reqScope.FieldManager, err = fieldmanager.NewCRDFieldManager(
+			reqScope.FieldManager, err = fieldmanager.NewDefaultCRDFieldManager(
 				openAPIModels,
 				reqScope.Convertor,
 				reqScope.Defaulter,
-				reqScope.Kind.GroupVersion(),
+				reqScope.Creater,
+				reqScope.Kind,
 				reqScope.HubGroupVersion,
 				*crd.Spec.PreserveUnknownFields,
 			)
@@ -1238,4 +1230,36 @@ func serverStartingError() error {
 		err.ErrStatus.Details.RetryAfterSeconds = int32(10)
 	}
 	return err
+}
+
+// buildOpenAPIModelsForApply constructs openapi models from any validation schemas specified in the custom resource,
+// and merges it with the models defined in the static OpenAPI spec.
+// Returns nil models if the ServerSideApply feature is disabled, or the static spec is nil, or an error is encountered.
+func buildOpenAPIModelsForApply(staticOpenAPISpec *spec.Swagger, crd *apiextensions.CustomResourceDefinition) (proto.Models, error) {
+	if !utilfeature.DefaultFeatureGate.Enabled(features.ServerSideApply) {
+		return nil, nil
+	}
+	if staticOpenAPISpec == nil {
+		return nil, nil
+	}
+
+	specs := []*spec.Swagger{}
+	for _, v := range crd.Spec.Versions {
+		s, err := builder.BuildSwagger(crd, v.Name, builder.Options{V2: false, StripDefaults: true, StripValueValidation: true, AllowNonStructural: true})
+		if err != nil {
+			return nil, err
+		}
+		specs = append(specs, s)
+	}
+
+	mergedOpenAPI, err := builder.MergeSpecs(staticOpenAPISpec, specs...)
+	if err != nil {
+		return nil, err
+	}
+
+	models, err := utilopenapi.ToProtoModels(mergedOpenAPI)
+	if err != nil {
+		return nil, err
+	}
+	return models, nil
 }

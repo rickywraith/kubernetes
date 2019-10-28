@@ -22,10 +22,11 @@ import (
 	"io"
 	"strings"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/diff"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apiserver/pkg/admission"
@@ -235,13 +236,20 @@ func (p *Plugin) admitPodStatus(nodeName string, a admission.Attributes) error {
 	switch a.GetOperation() {
 	case admission.Update:
 		// require an existing pod
-		pod, ok := a.GetOldObject().(*api.Pod)
+		oldPod, ok := a.GetOldObject().(*api.Pod)
 		if !ok {
 			return admission.NewForbidden(a, fmt.Errorf("unexpected type %T", a.GetOldObject()))
 		}
 		// only allow a node to update status of a pod bound to itself
-		if pod.Spec.NodeName != nodeName {
+		if oldPod.Spec.NodeName != nodeName {
 			return admission.NewForbidden(a, fmt.Errorf("node %q can only update pod status for pods with spec.nodeName set to itself", nodeName))
+		}
+		newPod, ok := a.GetObject().(*api.Pod)
+		if !ok {
+			return admission.NewForbidden(a, fmt.Errorf("unexpected type %T", a.GetObject()))
+		}
+		if !labels.Equals(oldPod.Labels, newPod.Labels) {
+			return admission.NewForbidden(a, fmt.Errorf("node %q cannot update labels through pod status", nodeName))
 		}
 		return nil
 
@@ -357,7 +365,7 @@ func (p *Plugin) admitNode(nodeName string, a admission.Attributes) error {
 			return admission.NewForbidden(a, fmt.Errorf("node %q is not allowed to set the following labels: %s", nodeName, strings.Join(forbiddenLabels.List(), ", ")))
 		}
 		// check and warn if nodes set labels on create that would have been forbidden on update
-		// TODO(liggitt): in 1.17, expand getForbiddenCreateLabels to match getForbiddenUpdateLabels and drop this
+		// TODO(liggitt): in 1.19, expand getForbiddenCreateLabels to match getForbiddenUpdateLabels and drop this
 		if forbiddenUpdateLabels := p.getForbiddenUpdateLabels(modifiedLabels); len(forbiddenUpdateLabels) > 0 {
 			klog.Warningf("node %q added disallowed labels on node creation: %s", nodeName, strings.Join(forbiddenUpdateLabels.List(), ", "))
 		}
@@ -435,7 +443,7 @@ func getLabelNamespace(key string) string {
 }
 
 // getForbiddenCreateLabels returns the set of labels that may not be set by the node.
-// TODO(liggitt): in 1.17, expand to match getForbiddenUpdateLabels()
+// TODO(liggitt): in 1.19, expand to match getForbiddenUpdateLabels()
 func (p *Plugin) getForbiddenCreateLabels(modifiedLabels sets.String) sets.String {
 	if len(modifiedLabels) == 0 {
 		return nil

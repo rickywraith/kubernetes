@@ -23,7 +23,10 @@ import (
 	storagev1beta1 "k8s.io/api/storage/v1beta1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
-	csilib "k8s.io/csi-translation-lib"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	storagelisters "k8s.io/client-go/listers/storage/v1"
+	v1beta1storagelisters "k8s.io/client-go/listers/storage/v1beta1"
+	csitrans "k8s.io/csi-translation-lib"
 	"k8s.io/klog"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/features"
@@ -31,30 +34,43 @@ import (
 	volumeutil "k8s.io/kubernetes/pkg/volume/util"
 )
 
+// InTreeToCSITranslator contains methods required to check migratable status
+// and perform translations from InTree PV's to CSI
+type InTreeToCSITranslator interface {
+	IsPVMigratable(pv *v1.PersistentVolume) bool
+	IsMigratableIntreePluginByName(inTreePluginName string) bool
+	GetInTreePluginNameFromSpec(pv *v1.PersistentVolume, vol *v1.Volume) (string, error)
+	GetCSINameFromInTreeName(pluginName string) (string, error)
+	TranslateInTreePVToCSI(pv *v1.PersistentVolume) (*v1.PersistentVolume, error)
+}
+
 // CSIMaxVolumeLimitChecker defines predicate needed for counting CSI volumes
 type CSIMaxVolumeLimitChecker struct {
-	csiNodeInfo CSINodeInfo
-	pvInfo      PersistentVolumeInfo
-	pvcInfo     PersistentVolumeClaimInfo
-	scInfo      StorageClassInfo
+	csiNodeLister v1beta1storagelisters.CSINodeLister
+	pvLister      corelisters.PersistentVolumeLister
+	pvcLister     corelisters.PersistentVolumeClaimLister
+	scLister      storagelisters.StorageClassLister
 
 	randomVolumeIDPrefix string
+
+	translator InTreeToCSITranslator
 }
 
 // NewCSIMaxVolumeLimitPredicate returns a predicate for counting CSI volumes
 func NewCSIMaxVolumeLimitPredicate(
-	csiNodeInfo CSINodeInfo, pvInfo PersistentVolumeInfo, pvcInfo PersistentVolumeClaimInfo, scInfo StorageClassInfo) FitPredicate {
+	csiNodeLister v1beta1storagelisters.CSINodeLister, pvLister corelisters.PersistentVolumeLister, pvcLister corelisters.PersistentVolumeClaimLister, scLister storagelisters.StorageClassLister) FitPredicate {
 	c := &CSIMaxVolumeLimitChecker{
-		csiNodeInfo:          csiNodeInfo,
-		pvInfo:               pvInfo,
-		pvcInfo:              pvcInfo,
-		scInfo:               scInfo,
+		csiNodeLister:        csiNodeLister,
+		pvLister:             pvLister,
+		pvcLister:            pvcLister,
+		scLister:             scLister,
 		randomVolumeIDPrefix: rand.String(32),
+		translator:           csitrans.New(),
 	}
 	return c.attachableLimitPredicate
 }
 
-func (c *CSIMaxVolumeLimitChecker) getVolumeLimits(nodeInfo *schedulernodeinfo.NodeInfo, csiNode *storagev1beta1.CSINode) map[v1.ResourceName]int64 {
+func getVolumeLimits(nodeInfo *schedulernodeinfo.NodeInfo, csiNode *storagev1beta1.CSINode) map[v1.ResourceName]int64 {
 	// TODO: stop getting values from Node object in v1.18
 	nodeVolumeLimits := nodeInfo.VolumeLimits()
 	if csiNode != nil {
@@ -87,7 +103,7 @@ func (c *CSIMaxVolumeLimitChecker) attachableLimitPredicate(
 	}
 
 	// If CSINode doesn't exist, the predicate may read the limits from Node object
-	csiNode, err := c.csiNodeInfo.GetCSINodeInfo(node.Name)
+	csiNode, err := c.csiNodeLister.Get(node.Name)
 	if err != nil {
 		// TODO: return the error once CSINode is created by default (2 releases)
 		klog.V(5).Infof("Could not get a CSINode object for the node: %v", err)
@@ -104,7 +120,7 @@ func (c *CSIMaxVolumeLimitChecker) attachableLimitPredicate(
 	}
 
 	// If the node doesn't have volume limits, the predicate will always be true
-	nodeVolumeLimits := c.getVolumeLimits(nodeInfo, csiNode)
+	nodeVolumeLimits := getVolumeLimits(nodeInfo, csiNode)
 	if len(nodeVolumeLimits) == 0 {
 		return true, nil, nil
 	}
@@ -156,7 +172,7 @@ func (c *CSIMaxVolumeLimitChecker) filterAttachableVolumes(
 			return fmt.Errorf("PersistentVolumeClaim had no name")
 		}
 
-		pvc, err := c.pvcInfo.GetPersistentVolumeClaimInfo(namespace, pvcName)
+		pvc, err := c.pvcLister.PersistentVolumeClaims(namespace).Get(pvcName)
 
 		if err != nil {
 			klog.V(5).Infof("Unable to look up PVC info for %s/%s", namespace, pvcName)
@@ -189,7 +205,7 @@ func (c *CSIMaxVolumeLimitChecker) getCSIDriverInfo(csiNode *storagev1beta1.CSIN
 		return c.getCSIDriverInfoFromSC(csiNode, pvc)
 	}
 
-	pv, err := c.pvInfo.GetPersistentVolumeInfo(pvName)
+	pv, err := c.pvLister.Get(pvName)
 	if err != nil {
 		klog.V(5).Infof("Unable to look up PV info for PVC %s/%s and PV %s", namespace, pvcName, pvName)
 		// If we can't fetch PV associated with PVC, may be it got deleted
@@ -201,11 +217,11 @@ func (c *CSIMaxVolumeLimitChecker) getCSIDriverInfo(csiNode *storagev1beta1.CSIN
 	csiSource := pv.Spec.PersistentVolumeSource.CSI
 	if csiSource == nil {
 		// We make a fast path for non-CSI volumes that aren't migratable
-		if !csilib.IsPVMigratable(pv) {
+		if !c.translator.IsPVMigratable(pv) {
 			return "", ""
 		}
 
-		pluginName, err := csilib.GetInTreePluginNameFromSpec(pv, nil)
+		pluginName, err := c.translator.GetInTreePluginNameFromSpec(pv, nil)
 		if err != nil {
 			klog.V(5).Infof("Unable to look up plugin name from PV spec: %v", err)
 			return "", ""
@@ -216,7 +232,7 @@ func (c *CSIMaxVolumeLimitChecker) getCSIDriverInfo(csiNode *storagev1beta1.CSIN
 			return "", ""
 		}
 
-		csiPV, err := csilib.TranslateInTreePVToCSI(pv)
+		csiPV, err := c.translator.TranslateInTreePVToCSI(pv)
 		if err != nil {
 			klog.V(5).Infof("Unable to translate in-tree volume to CSI: %v", err)
 			return "", ""
@@ -246,7 +262,7 @@ func (c *CSIMaxVolumeLimitChecker) getCSIDriverInfoFromSC(csiNode *storagev1beta
 		return "", ""
 	}
 
-	storageClass, err := c.scInfo.GetStorageClassInfo(scName)
+	storageClass, err := c.scLister.Get(scName)
 	if err != nil {
 		klog.V(5).Infof("Could not get StorageClass for PVC %s/%s: %v", namespace, pvcName, err)
 		return "", ""
@@ -258,13 +274,13 @@ func (c *CSIMaxVolumeLimitChecker) getCSIDriverInfoFromSC(csiNode *storagev1beta
 	volumeHandle := fmt.Sprintf("%s-%s/%s", c.randomVolumeIDPrefix, namespace, pvcName)
 
 	provisioner := storageClass.Provisioner
-	if csilib.IsMigratableIntreePluginByName(provisioner) {
+	if c.translator.IsMigratableIntreePluginByName(provisioner) {
 		if !isCSIMigrationOn(csiNode, provisioner) {
 			klog.V(5).Infof("CSI Migration of plugin %s is not enabled", provisioner)
 			return "", ""
 		}
 
-		driverName, err := csilib.GetCSINameFromInTreeName(provisioner)
+		driverName, err := c.translator.GetCSINameFromInTreeName(provisioner)
 		if err != nil {
 			klog.V(5).Infof("Unable to look up driver name from plugin name: %v", err)
 			return "", ""
